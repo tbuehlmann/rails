@@ -165,7 +165,7 @@ module ActiveRecord
         where(primary_key => id_or_array).delete_all
       end
 
-      def _insert_record(values) # :nodoc:
+      def _insert_record(values, returning: []) # :nodoc:
         primary_key_value = nil
 
         if primary_key && Hash === values
@@ -184,7 +184,7 @@ module ActiveRecord
           im = arel_table.compile_insert(_substitute_values(values))
         end
 
-        connection.insert(im, "#{self} Create", primary_key || false, primary_key_value)
+        connection.insert(im, "#{self} Create", primary_key || false, primary_key_value, returning: returning)
       end
 
       def _update_record(values, constraints) # :nodoc:
@@ -732,8 +732,12 @@ module ActiveRecord
       attribute_names &= self.class.column_names
       attributes_values = attributes_with_values_for_create(attribute_names)
 
-      new_id = self.class._insert_record(attributes_values)
+      new_id, result = self.class._insert_record(attributes_values, returning: self.class.returning)
       self.id ||= new_id if self.class.primary_key
+
+      self.class.returning.each do |column|
+        write_attribute(column, result.to_hash.first[column.to_s])
+      end
 
       @new_record = false
 
